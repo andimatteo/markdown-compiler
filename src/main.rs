@@ -1,6 +1,7 @@
 use std::fs;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
+use std::thread::current;
 use serde::{Deserialize};
 use std::mem::{discriminant, take};
 
@@ -155,6 +156,43 @@ fn parse_inline(s: &str) -> Vec<Inline> {
     }
 
     result
+}
+
+fn parse_block(current_block: &BlockKind, current_block_content: String) -> Block {
+    match current_block {
+        BlockKind::CodeBlock => Block::CodeBlock(
+            current_block_content
+        ),
+        BlockKind::BlockQuote => Block::BlockQuote(
+            parse_inline(&current_block_content)
+        ),
+        BlockKind::Heading(h) => Block::Heading{
+            level: *h,
+            content: parse_inline(&current_block_content)
+        },
+        /*
+        * TODO:
+        * actually implement lists
+        * */
+        BlockKind::UnorderedList => Block::UnorderedList { 
+            lines: current_block_content.lines().count() as u32,
+            content: current_block_content
+                .lines()
+                .map(|line| Inline::Text(line.to_owned()))
+                .collect(),
+        },
+        BlockKind::Orderedlist => Block::OrderedList { 
+            lines: current_block_content.lines().count() as u32,
+            content: current_block_content
+                .lines()
+                .map(|line| Inline::Text(line.to_owned()))
+                .collect(),
+        },
+        BlockKind::Paragraph => Block::Paragraph(
+            parse_inline(&current_block_content)
+        ),
+        BlockKind::NoBlock => Block::NoBlock,
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -332,42 +370,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             * need to change block and push on old block
             * */
             if new_block != current_block {
-                let block = 
-                match current_block {
-                    BlockKind::CodeBlock => Block::CodeBlock(
-                        current_block_content
-                    ),
-                    BlockKind::BlockQuote => Block::BlockQuote(
-                        parse_inline(&current_block_content)
-                    ),
-                    BlockKind::Heading(h) => Block::Heading{
-                        level: h,
-                        content: parse_inline(&current_block_content)
-                    },
-                    /*
-                    * TODO:
-                    * actually implement lists
-                    * */
-                    BlockKind::UnorderedList => Block::UnorderedList { 
-                        lines: current_block_content.lines().count() as u32,
-                        content: current_block_content
-                            .lines()
-                            .map(|line| Inline::Text(line.to_owned()))
-                            .collect(),
-                    },
-                    BlockKind::Orderedlist => Block::OrderedList { 
-                        lines: current_block_content.lines().count() as u32,
-                        content: current_block_content
-                            .lines()
-                            .map(|line| Inline::Text(line.to_owned()))
-                            .collect(),
-                    },
-                    BlockKind::Paragraph => Block::Paragraph(
-                        parse_inline(&current_block_content)
-                    ),
-                    BlockKind::NoBlock => Block::NoBlock,
-                };
-
+                let block = parse_block(&current_block, current_block_content);
                 /*
                 * bruh, current block is a no block,
                 * no need to push
@@ -383,17 +386,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             current_block_content.push('\n');
         }
 
+        /*
+        * still a closing block
+        * */
+        if current_block != BlockKind::NoBlock {
+            let block = parse_block(&current_block,current_block_content);
+            body.push(block);
+        }
+
         println!("{:#?}", body);
 
-        /* 
-        * TODO:
-        * there could still be a non empty block open
-        * */
     }
 
     Ok(())
 }
 
-fn new() -> bool {
-    todo!()
-}
