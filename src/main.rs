@@ -7,23 +7,20 @@ use std::mem::{discriminant, take};
 use chrono::NaiveDate;
 use regex::Regex;
 
-enum InlineKind {
-    Text,
-    Emphasis,
-    Strong,
-    Code,
-    Link,
-}
-
+#[derive(Debug)]
 enum Inline {
     Text(String),
-    Emphasis(String),
-    Strong(String),
+    Italic(String),
+    Bold(String),
     Code(String),
-    Link { text: String, url: String }
+    Link {
+        text: String,
+        url: String,
+    },
+    Strikethrough(String),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Heading{
     H1,
     H2,
@@ -50,12 +47,22 @@ impl PartialEq for BlockKind {
     }
 }
 
+#[derive(Debug)]
 enum Block {
-    Heading{ level: Heading, content: Vec<Inline> },
+    Heading {
+        level: Heading,
+        content: Vec<Inline>,
+    },
     Paragraph(Vec<Inline>),
     CodeBlock(String),
-    UnorderedList{ lines: u32, content: Vec<Inline> },
-    OrderedList{ lines: u32, content: Vec<Inline> },
+    UnorderedList {
+        lines: u32,
+        content: Vec<Inline>,
+    },
+    OrderedList {
+        lines: u32,
+        content: Vec<Inline>,
+    },
     BlockQuote(Vec<Inline>),
     NoBlock,
 }
@@ -87,9 +94,67 @@ fn skip_blank<I: Iterator<Item = std::io::Result<String>>>(lines: &mut std::iter
     }
 }
 
-fn parse_inline(s: &str, kind: &BlockKind) -> Vec<Inline> {
-    println!("line count: {}",s.lines().count());
-    Vec::new()
+fn parse_inline(s: &str) -> Vec<Inline> {
+    let mut result = Vec::new();
+
+    let mut i = 0;
+    let mut text_start = 0;
+
+    while i < s.len() {
+        let delimiter = if s[i..].starts_with("**") {
+            Some("**")
+        } else if s[i..].starts_with('*') {
+            Some("*")
+        } else if s[i..].starts_with('~') {
+            Some("~")
+        } else if s[i..].starts_with('`') {
+            Some("`")
+        } else {
+            None
+        };
+
+        if let Some(delimiter) = delimiter {
+            let content_start = i + delimiter.len();
+
+            if let Some(relative_end) = s[content_start..].find(delimiter) {
+                let content_end = content_start + relative_end;
+
+                if text_start < i {
+                    result.push(Inline::Text(
+                        s[text_start..i].to_owned(),
+                    ));
+                }
+
+                let content = s[content_start..content_end].to_owned();
+
+                match delimiter {
+                    "**" => result.push(Inline::Bold(content)),
+                    "*" => result.push(Inline::Italic(content)),
+                    "~" => result.push(Inline::Strikethrough(content)),
+                    "`" => result.push(Inline::Code(content)),
+                    _ => unreachable!(),
+                }
+
+                i = content_end + delimiter.len();
+                text_start = i;
+                continue;
+            }
+        }
+
+        i += s[i..]
+            .chars()
+            .next()
+            .unwrap()
+            .len_utf8();
+    }
+
+    if text_start < s.len() {
+        result.push(Inline::Text(
+            s[text_start..].to_owned(),
+        ));
+    }
+
+    result
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -159,7 +224,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(line) = lines.next() {
             let line = line?;
             let line_trimmed = line.trim();
-            let new_block =
+            let (new_block, new_line) =
             match line_trimmed {
                 /*
                 * must check first if we are opening or closing
@@ -167,26 +232,94 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 * */
                 l if l.starts_with("```") || l.starts_with("~~~") => {
                     is_code = !is_code;
-                    if is_code { BlockKind::CodeBlock } else { BlockKind::NoBlock }
+                    if is_code { (BlockKind::CodeBlock,"") } else { (BlockKind::NoBlock,"") }
                 },
                 /*
                 * if we are in a codeblock then we are in a codeblock, period.
                 * */
-                _ if is_code => BlockKind::CodeBlock,
-                l if l.starts_with("###### ") => BlockKind::Heading(Heading::H6),
-                l if l.starts_with("##### ") => BlockKind::Heading(Heading::H5),
-                l if l.starts_with("#### ") => BlockKind::Heading(Heading::H4),
-                l if l.starts_with("### ") => BlockKind::Heading(Heading::H3),
-                l if l.starts_with("## ") => BlockKind::Heading(Heading::H2),
-                l if l.starts_with("# ") => BlockKind::Heading(Heading::H1),
-                l if l.starts_with("> ") || l == ">" => BlockKind::BlockQuote,
-                l if l.starts_with("- ") || l.starts_with("* ") || l.starts_with("+ ") => BlockKind::UnorderedList,
+                l if is_code => (BlockKind::CodeBlock,l),
+                l if l.starts_with("###### ") => {
+                    (
+                        BlockKind::Heading(Heading::H6),
+                        &l[7..],
+                    )
+                },
+                l if l.starts_with("##### ") => {
+                    (
+                        BlockKind::Heading(Heading::H5),
+                        &l[6..],
+                    )
+                },
+                l if l.starts_with("#### ") => {
+                    (
+                        BlockKind::Heading(Heading::H4),
+                        &l[5..],
+                    )
+                },
+                l if l.starts_with("### ") => {
+                    (
+                        BlockKind::Heading(Heading::H3),
+                        &l[4..],
+                    )
+                },
+                l if l.starts_with("## ") => {
+                    (
+                        BlockKind::Heading(Heading::H2),
+                        &l[3..],
+                    )
+                },
+                l if l.starts_with("# ") => {
+                    (
+                        BlockKind::Heading(Heading::H1),
+                        &l[2..],
+                    )
+                },
+                l if l.starts_with("> ") => {
+                    (
+                        BlockKind::BlockQuote,
+                        &l[2..],
+                    )
+                },
+                l if l.starts_with("- ") || l.starts_with("* ") || l.starts_with("+ ") => {
+                    (
+                        BlockKind::UnorderedList,
+                        &l[2..],
+                    )
+                },
+                /*
+                * TODO:
+                * fix this stuff, it's just recomputing twice
+                * the same thing...
+                * */
                 l if {
-                    let d = l.chars().take_while(|c| c.is_ascii_digit()).count();
+                    let d = l
+                        .chars()
+                        .take_while(|c| c.is_ascii_digit())
+                        .count();
+
                     d > 0 && matches!(l.chars().nth(d), Some('.') | Some(')'))
-                } => BlockKind::Orderedlist,
-                l if l.is_empty() => BlockKind::NoBlock,
-                _ => BlockKind::Paragraph,
+                } => {
+                    let d = l
+                        .chars()
+                        .take_while(|c| c.is_ascii_digit())
+                        .count();
+
+                    (
+                        BlockKind::Orderedlist,
+                        l[d + 1..].trim_start(),
+                    )
+                },
+                l if l.is_empty() => {
+                    (
+                        BlockKind::NoBlock,
+                        "",
+                    )
+                }
+                l => {
+                    (
+                        BlockKind::Paragraph,l
+                    )
+                }
             };
 
             /* if keeping up with no block then continue */
@@ -205,22 +338,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         current_block_content
                     ),
                     BlockKind::BlockQuote => Block::BlockQuote(
-                        parse_inline(&current_block_content, &current_block)
+                        parse_inline(&current_block_content)
                     ),
                     BlockKind::Heading(h) => Block::Heading{
                         level: h,
-                        content: parse_inline(&current_block_content, &current_block)
+                        content: parse_inline(&current_block_content)
                     },
+                    /*
+                    * TODO:
+                    * actually implement lists
+                    * */
                     BlockKind::UnorderedList => Block::UnorderedList { 
                         lines: current_block_content.lines().count() as u32,
-                        content: parse_inline(&current_block_content, &current_block)
+                        content: current_block_content
+                            .lines()
+                            .map(|line| Inline::Text(line.to_owned()))
+                            .collect(),
                     },
                     BlockKind::Orderedlist => Block::OrderedList { 
                         lines: current_block_content.lines().count() as u32,
-                        content: parse_inline(&current_block_content, &current_block)
+                        content: current_block_content
+                            .lines()
+                            .map(|line| Inline::Text(line.to_owned()))
+                            .collect(),
                     },
                     BlockKind::Paragraph => Block::Paragraph(
-                        parse_inline(&current_block_content, &current_block)
+                        parse_inline(&current_block_content)
                     ),
                     BlockKind::NoBlock => Block::NoBlock,
                 };
@@ -236,11 +379,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 current_block_content = String::new();
                 current_block = new_block;
             }
-            current_block_content.push_str(line_trimmed);
+            current_block_content.push_str(new_line);
             current_block_content.push('\n');
         }
 
-        /* there could still be a non empty block open */
+        println!("{:#?}", body);
+
+        /* 
+        * TODO:
+        * there could still be a non empty block open
+        * */
     }
 
     Ok(())
