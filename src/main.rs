@@ -2,6 +2,7 @@ use core::fmt::{self, Display};
 use std::fmt::Formatter;
 use std::fs;
 use std::fs::File;
+use fs_extra::dir::{copy, CopyOptions};
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::thread::current;
@@ -100,7 +101,7 @@ impl Display for Block {
             Block::Heading{ level, content } => {
                 let l = level.level();
                 write!(
-                    f,"<h{}>{}<h{}>",
+                    f,"<h{}>{}</h{}>",
                     l,
                     content
                         .iter()
@@ -302,6 +303,25 @@ fn render(template: &str, fields: &[(&str, &str)]) -> String {
     out
 }
 
+/*
+* very simple function that
+* given the post title returns file name
+* */
+fn normalize(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | ' ' => '_',
+            c if (c as u32) < 0x20 => '_',
+            c => c,
+        })
+        .collect::<String>()
+        .to_lowercase()
+}
+
+fn file_name(s: &str) -> String {
+    format!("{}.html", normalize(s))
+}
+
 fn compile_post(post: &Post) -> io::Result<()> {
     let header = fs::read_to_string("templates/head.html")?;
     let body = fs::read_to_string("templates/body.html")?;
@@ -309,15 +329,7 @@ fn compile_post(post: &Post) -> io::Result<()> {
     let _ = fs::create_dir_all(out_dir);
     
     /* clean filename from unwanted chars */
-    let mut out_file_name: String = post.metadata.title
-    .chars()
-    .map(|c| match c {
-        '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | ' ' => '_',
-        c if (c as u32) < 0x20 => '_',
-        c => c,
-    })
-    .collect();
-    out_file_name.push_str(".html");
+    let out_file_name: String = file_name(&post.metadata.title);
 
     let mut w = BufWriter::new(File::create(out_dir.join(out_file_name))?);
 
@@ -333,7 +345,21 @@ fn compile_post(post: &Post) -> io::Result<()> {
     w.flush()?;
 
     Ok(())
-}   
+}
+
+fn compile_index() {
+    
+}
+
+/*
+* Once we have completed all file compilation
+* we can prooceed with moving all static files
+* */
+fn move_static() -> fs_extra::error::Result<()> {
+    let opts = CopyOptions::new().overwrite(true).content_only(true);
+    copy("static", "dist/static", &opts)?;
+    Ok(())
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
@@ -543,11 +569,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         /*
-        * DEBUG
-        * */
-        // println!("{}", body.iter().map(|b| b.to_string()).collect::<Vec<_>>().join(""));
-
-        /*
         * NOTE:
         * now we have completely parsed the .md file
         * */
@@ -562,13 +583,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         * to another thread
         * */
         let _ = compile_post(&post);
-
-        /*
-        * this may be needed further for
-        * metadata extraction later and index building
-        * */
         posts.push(post);
     }
+
+    compile_index();
+
+    let _ = move_static();
 
     Ok(())
 }
