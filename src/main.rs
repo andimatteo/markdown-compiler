@@ -3,7 +3,9 @@ use std::fmt::Formatter;
 use std::fs;
 use std::fs::File;
 use fs_extra::dir::{copy, CopyOptions};
-use std::io::{self, BufRead, BufReader, BufWriter, Write};
+use std::io::{self, BufRead, BufReader, BufWriter};
+use std::fmt::Write as FmtWrite;
+use std::io::Write as IoWrite;
 use std::path::Path;
 use std::thread::current;
 use serde::{Deserialize};
@@ -305,7 +307,7 @@ fn render(template: &str, fields: &[(&str, &str)]) -> String {
 
 /*
 * very simple function that
-* given the post title returns file name
+* given the post title returns normalized name
 * */
 fn normalize(s: &str) -> String {
     s.chars()
@@ -318,6 +320,18 @@ fn normalize(s: &str) -> String {
         .to_lowercase()
 }
 
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+/*
+* very simple function that
+* given the post title returns file name
+* */
 fn file_name(s: &str) -> String {
     format!("{}.html", normalize(s))
 }
@@ -347,8 +361,61 @@ fn compile_post(post: &Post) -> io::Result<()> {
     Ok(())
 }
 
-fn compile_index() {
-    
+fn compile_index(posts: &[Post]) -> io::Result<()> {
+    let header = fs::read_to_string("templates/head.html")?;
+    let body = fs::read_to_string("templates/index.html")?;
+
+    /* should not be necessary, idempotent */
+    let out_dir = Path::new("dist");
+    fs::create_dir_all(out_dir)?;
+
+    let mut w = BufWriter::new(
+        File::create(out_dir.join("index.html"))?
+    );
+
+    let mut content = String::new();
+
+    for post in posts {
+        let href = file_name(&post.metadata.title);
+
+        let description = if post.metadata.description.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "<p>{}</p>",
+                escape_html(&post.metadata.description)
+            )
+        };
+
+        write!(
+            &mut content,
+            r#"<li class="post-item" data-name="{name}" data-date="{date}">
+    <a class="post-link" href="{href}">
+        <h2>{title}</h2>
+        <time datetime="{date}">{date}</time>
+        {description}
+    </a>
+</li>
+"#,
+            name = post.metadata.title,
+            href = href,
+            title = escape_html(&post.metadata.title),
+            date = post.metadata.date,
+            description = description,
+        )
+        .unwrap();
+    }
+
+    let page = format!(
+        "<!DOCTYPE html><html>{}{}</html>",
+        render(&header, &[("title", "index")]),
+        render(&body, &[("post-list", &content)]),
+    );
+
+    w.write_all(page.as_bytes())?;
+    w.flush()?;
+
+    Ok(())
 }
 
 /*
@@ -586,7 +653,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         posts.push(post);
     }
 
-    compile_index();
+    compile_index(&posts);
 
     let _ = move_static();
 
