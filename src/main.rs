@@ -1,12 +1,15 @@
+use core::fmt::{self, Display};
+use std::fmt::Formatter;
 use std::fs;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, BufWriter};
+use std::path::Path;
 use std::thread::current;
 use serde::{Deserialize};
 use std::mem::{discriminant, take};
 
 use chrono::NaiveDate;
-use regex::Regex;
+use regex::{Regex, escape};
 
 #[derive(Debug)]
 enum Inline {
@@ -21,6 +24,20 @@ enum Inline {
     Strikethrough(String),
 }
 
+impl Display for Inline {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Inline::Text(s) => write!(f, "{}", escape(s.trim())),
+            Inline::Italic(s) => write!(f, "<em>{}</em>", escape(s.trim())),
+            Inline::Bold(s) => write!(f, "<strong>{}</strong>", escape(s.trim())),
+            Inline::Code(s) => write!(f, "<code>{}</code>", escape(s.trim())),
+            Inline::Link{text, url} => write!(f, "<a href=\"{}\">{}</a>", url, escape(text)),
+            Inline::Strikethrough(s) => write!(f, "<del>{}</del>", escape(s.trim())),
+        }
+    }
+}
+
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Heading{
     H1,
@@ -29,6 +46,15 @@ enum Heading{
     H4,
     H5,
     H6
+}
+
+impl Heading {
+    fn level(&self) -> u8 {
+        match self {
+            Heading::H1 => 1, Heading::H2 => 2, Heading::H3 => 3,
+            Heading::H4 => 4, Heading::H5 => 5, Heading::H6 => 6,
+        }
+    }
 }
 
 enum BlockKind{
@@ -66,6 +92,79 @@ enum Block {
     },
     BlockQuote(Vec<Inline>),
     NoBlock,
+}
+
+impl Display for Block {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Block::Heading{ level, content } => {
+                let l = level.level();
+                write!(
+                    f,"<h{}>{}<h{}>",
+                    l,
+                    content
+                        .iter()
+                        .map(|i| i.to_string())
+                        .collect::<Vec<_>>().join(" "),
+                    l
+                )
+            },
+            Block::OrderedList{ lines, content } => {
+                write!(
+                    f,
+                    "<ol>{}</ol>",
+                    content
+                        .iter()
+                        .map(|i| format!("<li>{}</li>", i))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                )
+            },
+            Block::UnorderedList{ lines, content } => {
+                write!(
+                    f,
+                    "<ul>{}</ul>",
+                    content
+                        .iter()
+                        .map(|i| format!("<li>{}</li>", i))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                )
+            },
+            Block::BlockQuote(content) => {
+                write!(
+                    f,
+                    "<blockquote>{}</blockquote>",
+                    content
+                        .iter()
+                        .map(|i| i.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                )
+            },
+            Block::Paragraph(content) => {
+                write!(
+                    f,
+                    "<p>{}</p>",
+                    content
+                        .iter()
+                        .map(|i| i.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                )
+            },
+            Block::CodeBlock(content) => {
+                write!(
+                    f,
+                    "<pre><code>{}</code></pre>",
+                    content
+                )
+            },
+            Block::NoBlock => {
+                write!(f,"#DEBUG")
+            }
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -195,6 +294,29 @@ fn parse_block(current_block: &BlockKind, current_block_content: String) -> Bloc
     }
 }
 
+fn render(template: &str, campi: &[(&str, &str)]) -> String {
+    let mut out = template.to_string();
+    for (chiave, valore) in campi {
+        out = out.replace(&format!("{{{{{}}}}}", chiave), valore);
+    }
+    out
+}
+
+fn compile_post(post: &Post) {
+    let header = fs::read_to_string("templates/header.html");
+    let body = fs::read_to_string("templates/body.html");
+    let out_dir = Path::new("dist");
+    fs::create_dir_all(out_dir);
+    let out_file_name = post.metadata.title
+        .chars()
+        .map(|c| match c {
+            // vietati su Windows + separatori
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            c if (c as u32) < 0x20 => '_',   // control chars
+            c => c,
+        });
+}   
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let files: Vec<_> = fs::read_dir("posts/")?
@@ -212,7 +334,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     * Technically we are not deriving any AST for the moment,
     * we have just one level of block and then a series of inline
     * modifiers for each block.
+    *
+    * We can completely parallelize this for
     * */
+    let mut posts : Vec<Post> = Vec::new();
     for path in files {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
@@ -259,7 +384,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut new_block = Block::NoBlock;
         let mut is_code = false;
 
-        while let Some(line) = lines.next() {
+        for line in lines {
             let line = line?;
             let line_trimmed = line.trim();
             let (new_block, new_line) =
@@ -394,10 +519,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             body.push(block);
         }
 
-        println!("{:#?}", body);
+        /*
+        * DEBUG
+        * */
+        // println!("{}", body.iter().map(|b| b.to_string()).collect::<Vec<_>>().join(""));
 
+        /*
+        * NOTE:
+        * now we have completely parsed the .md file
+        * */
+        let post = Post {
+            metadata,
+            body
+        };
+
+        /*
+        * TODO:
+        * could also async defer this operation
+        * to another thread
+        * */
+        compile_post(&post);
+
+        /*
+        * this may be needed further for
+        * metadata extraction later and index building
+        * */
+        posts.push(post);
     }
 
     Ok(())
 }
+
 
