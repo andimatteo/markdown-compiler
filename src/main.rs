@@ -2,7 +2,7 @@ use core::fmt::{self, Display};
 use std::fmt::Formatter;
 use std::fs;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter};
+use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::thread::current;
 use serde::{Deserialize};
@@ -294,27 +294,45 @@ fn parse_block(current_block: &BlockKind, current_block_content: String) -> Bloc
     }
 }
 
-fn render(template: &str, campi: &[(&str, &str)]) -> String {
+fn render(template: &str, fields: &[(&str, &str)]) -> String {
     let mut out = template.to_string();
-    for (chiave, valore) in campi {
-        out = out.replace(&format!("{{{{{}}}}}", chiave), valore);
+    for (key, value) in fields {
+        out = out.replace(&format!("{{{{{}}}}}", key), value);
     }
     out
 }
 
-fn compile_post(post: &Post) {
-    let header = fs::read_to_string("templates/header.html");
-    let body = fs::read_to_string("templates/body.html");
+fn compile_post(post: &Post) -> io::Result<()> {
+    let header = fs::read_to_string("templates/head.html")?;
+    let body = fs::read_to_string("templates/body.html")?;
     let out_dir = Path::new("dist");
     fs::create_dir_all(out_dir);
-    let out_file_name = post.metadata.title
-        .chars()
-        .map(|c| match c {
-            // vietati su Windows + separatori
-            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
-            c if (c as u32) < 0x20 => '_',   // control chars
-            c => c,
-        });
+    
+    /* clean filename from unwanted chars */
+    let mut out_file_name: String = post.metadata.title
+    .chars()
+    .map(|c| match c {
+        '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | ' ' => '_',
+        c if (c as u32) < 0x20 => '_',
+        c => c,
+    })
+    .collect();
+    out_file_name.push_str(".html");
+
+    let mut w = BufWriter::new(File::create(out_dir.join(out_file_name))?);
+
+    let content: String = post.body.iter().map(|b| b.to_string()).collect();
+
+    let page = format!(
+        "<!DOCTYPE html><html>{}{}</html>",
+        render(&header, &[("title", &post.metadata.title)]),
+        render(&body, &[("body", &content)]),
+    );
+
+    w.write_all(page.as_bytes())?;
+    w.flush()?;
+
+    Ok(())
 }   
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
