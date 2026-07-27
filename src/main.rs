@@ -306,7 +306,7 @@ fn compile_post(post: &Post) -> io::Result<()> {
     let header = fs::read_to_string("templates/head.html")?;
     let body = fs::read_to_string("templates/body.html")?;
     let out_dir = Path::new("dist");
-    fs::create_dir_all(out_dir);
+    let _ = fs::create_dir_all(out_dir);
     
     /* clean filename from unwanted chars */
     let mut out_file_name: String = post.metadata.title
@@ -381,6 +381,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         * is just enough
         * */
         let metadata: PostMetadata = serde_yaml::from_str(&header)?;
+
+        /* if post is draft then don't serve it. */
+        if metadata.draft {
+            continue;
+        }
 
         /* 
         * block parsing.
@@ -556,7 +561,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         * could also async defer this operation
         * to another thread
         * */
-        compile_post(&post);
+        let _ = compile_post(&post);
 
         /*
         * this may be needed further for
