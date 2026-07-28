@@ -1,0 +1,67 @@
+name: deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# GITHUB_TOKEN permissions needed by actions/deploy-pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# one deploy at a time, never cancel a running one halfway
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  DOMAIN: andreadimatteo.com
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      # posts/ -> dist/, plus static/ -> dist/static/
+      - name: Build site
+        run: cargo run --release
+
+      - name: Check index was generated
+        run: test -f dist/index.html
+
+      # custom domain, so Pages does not fall back to the *.github.io subpath
+      - name: Write CNAME
+        run: echo "$DOMAIN" > dist/CNAME
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
