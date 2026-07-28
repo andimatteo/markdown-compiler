@@ -825,7 +825,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         posts.push(post);
     }
     
-    posts.sort_by_key(|p| p.metadata.date);
+    posts.sort_by_key(|p| std::cmp::Reverse(p.metadata.date));
     compile_index(&posts)?;
 
     move_static()?;
