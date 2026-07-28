@@ -4,15 +4,13 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Formatter;
 use std::fs;
 use std::fs::File;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use fs_extra::dir::{copy, CopyOptions};
 use std::io::{self, BufRead, BufReader, BufWriter};
 use std::fmt::Write as FmtWrite;
 use std::io::Write as IoWrite;
 use std::path::Path;
-use std::thread::current;
 use serde::{Deserialize};
-use std::mem::{discriminant, take};
+use std::mem::discriminant;
 use chrono::NaiveDate;
 
 
@@ -62,7 +60,7 @@ impl Heading {
 
 /*
 * this is a utility enum for defining the current
-* context: when parsing our context can be in one
+* context: when parsing, the context can be in one
 * of the following admissible states
 * */
 enum BlockKind{
@@ -96,11 +94,9 @@ enum Block {
     Paragraph(Vec<Inline>),
     CodeBlock(String),
     UnorderedList {
-        lines: u32,
         content: Vec<Inline>,
     },
     OrderedList {
-        lines: u32,
         content: Vec<Inline>,
     },
     BlockQuote(Vec<Inline>),
@@ -123,7 +119,7 @@ impl Display for Block {
                     l
                 )
             },
-            Block::OrderedList{ lines, content } => {
+            Block::OrderedList{ content } => {
                 write!(
                     f,
                     "<ol>{}</ol>",
@@ -134,7 +130,7 @@ impl Display for Block {
                         .join("")
                 )
             },
-            Block::UnorderedList{ lines, content } => {
+            Block::UnorderedList{ content } => {
                 write!(
                     f,
                     "<ul>{}</ul>",
@@ -213,19 +209,6 @@ struct PostMetadata {
 }
 
 /*
-* utility functions
-* */
-fn skip_blank<I: Iterator<Item = std::io::Result<String>>>(lines: &mut std::iter::Peekable<I>) {
-    while let Some(Ok(line)) = lines.peek() {
-        if line.trim().trim_end().is_empty() {
-            lines.next();
-        } else {
-            break;
-        }
-    }
-}
-
-/*
 * simple function to return the slug
 * of a name
 * */
@@ -275,7 +258,7 @@ fn escape_html(s: &str) -> String {
 }
 
 /*
-* TODO:
+* TODO: done
 * now that we are so proud of adding collision detection
 * on the names we must also keep the name of the file inside
 * the metadata, otherwise we cannot retrieve the correct
@@ -297,6 +280,12 @@ fn unique_name(base: &str, counts: &mut HashMap<String,usize>, used: &mut HashSe
     }
 }
 
+
+/*
+* parsing functions
+* - inline
+* - block
+* */
 fn parse_inline(s: &str) -> Vec<Inline> {
     let mut result = Vec::new();
 
@@ -415,14 +404,12 @@ fn parse_block(current_block: &BlockKind, current_block_content: String) -> Bloc
         * actually implement lists
         * */
         BlockKind::UnorderedList => Block::UnorderedList { 
-            lines: current_block_content.lines().count() as u32,
             content: current_block_content
                 .lines()
                 .map(|line| Inline::Text(line.to_owned()))
                 .collect(),
         },
         BlockKind::Orderedlist => Block::OrderedList { 
-            lines: current_block_content.lines().count() as u32,
             content: current_block_content
                 .lines()
                 .map(|line| Inline::Text(line.to_owned()))
@@ -435,6 +422,21 @@ fn parse_block(current_block: &BlockKind, current_block_content: String) -> Bloc
     }
 }
 
+/*
+* very simple rendering
+* function, substitutes every {{name}}
+* element in the code usign a map.
+*
+* TODO:
+* implement also programmatic rendering
+* (that's right, like angular frameworks).
+* This will make it easier for
+* index template definition.
+*
+* @for elem in list {
+*   <li> {{elem.text}} </li>
+* }
+* */
 fn render(template: &str, fields: &[(&str, &str)]) -> String {
     let mut out = template.to_string();
     for (key, value) in fields {
@@ -443,6 +445,12 @@ fn render(template: &str, fields: &[(&str, &str)]) -> String {
     out
 }
 
+
+/*
+* compilation functions
+* - single posts
+* - index
+* */
 fn compile_post(post: &Post) -> io::Result<()> {
     let header = fs::read_to_string("templates/head.html")?;
     let body = fs::read_to_string("templates/body.html")?;
@@ -605,7 +613,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut body: Vec<Block> = Vec::new();
         let mut current_block = BlockKind::NoBlock;
         let mut current_block_content = String::new();
-        let mut new_block = Block::NoBlock;
         let mut is_code = false;
 
         for line in lines {
@@ -770,5 +777,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-
