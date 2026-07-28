@@ -8,11 +8,26 @@ use fs_extra::dir::{copy, CopyOptions};
 use std::io::{self, BufRead, BufReader, BufWriter};
 use std::fmt::Write as FmtWrite;
 use std::io::Write as IoWrite;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use serde::{Deserialize};
 use std::mem::discriminant;
 use chrono::NaiveDate;
 
+fn find_markdown_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+
+    for entry in fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            files.extend(find_markdown_files(&path)?);
+        } else if path.is_file()
+            && path.extension().is_some_and(|extension| extension == "md")
+        {
+            files.push(path);
+        }
+    }
+    Ok(files)
+}
 
 /*
 * structure for representing
@@ -598,12 +613,7 @@ fn move_static() -> fs_extra::error::Result<()> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
-    let files: Vec<_> = fs::read_dir("posts/")?
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.is_file())
-        .filter(|p| p.extension().is_some_and(|e| e == "md"))
-        .collect();
+    let files = find_markdown_files(Path::new("posts/"))?;
     let mut counts = HashMap::<String,usize>::new();
     let mut used = HashSet::<String>::new();
 
