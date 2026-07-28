@@ -13,10 +13,11 @@ plain HTML that GitHub Pages serves as is.
 
 ```
 posts/      the markdown sources, one file per post
-static/     css, images, gifs — copied verbatim to dist/static/
+static/     style.css, vim.js, images, gifs — copied verbatim to dist/static/
 templates/  head.html, topbar.html, body.html (post page), index.html (post list)
 src/        the compiler
 dist/       build output, gitignored, regenerated from scratch on every run
+LICENSE     MIT
 ```
 
 ## Build
@@ -83,6 +84,47 @@ blocks (``` or ~~~), unordered lists (`-`, `*`, `+`), ordered lists (`1.` or
 Images resolve to `static/<file>`, so `![demo](demo.gif)` refers to
 `static/demo.gif`. Drop the file in `static/` and reference it by bare filename.
 
+## The index
+
+`dist/index.html` is the whole post list, no pagination and no client side
+router — the filtering happens in the page, on markup the compiler already
+wrote. Every row carries `data-name`, `data-desc` and `data-tags`, so the
+search box matches title, description and tags at once, and the tag buttons
+filter on top of it. Two active tags mean both, not either.
+
+Keys: `j` and `k` move, `gg` and `G` jump to the ends, `Tab` and `Shift-Tab`
+work too, `Enter` or `o` opens the selected post, `/` focuses the search, `Esc`
+clears the search if you are in it and the tag filters if you are not.
+
+## The theme
+
+`t` toggles light and dark, on every page. The choice lands in `localStorage`
+and is applied by an inline script in `head.html`, before the first paint, so
+there is no flash of the wrong theme. Open tabs follow along through the
+`storage` event. With `localStorage` unavailable — private windows, mostly —
+it falls back to a `?theme=` parameter carried across internal links, so the
+choice still survives a click.
+
+## Reading a post
+
+Post pages carry a vim cursor. `static/vim.js` measures every character of
+every text node under `main.post`, groups the ones sharing a row into visual
+lines, and moves a block cursor over that flat array — so `j` follows the line
+you see, not the markup underneath it. There is a status line at the bottom of
+the window with the file name, the pending command, and `line,col` plus a
+percentage.
+
+`h j k l`, `w b e` (and `W B E`, `ge`), `0 ^ $`, `{ }`, `gg G`, `H M L`, `f F`
+with `;` and `,`, counts (`5j`, `42G`, `50%`), `C-d C-u C-f C-b C-e C-y`,
+`zz zt zb`, `/` and `?` with `n` and `N` and incremental search, `*` for the
+word under the cursor, `v` and `V` with `y` to yank, `%` between brackets.
+`Enter` (or `o`, or `gx`) follows the link under the cursor, `t` still toggles
+the theme, `:q` and `ZZ` go back to the index, and `F1` or `:help` lists the
+lot. Editing commands answer the way a readonly buffer does.
+
+The cursor only appears where there is a keyboard — the whole layer is skipped
+on coarse pointers.
+
 ## Deployment
 
 `.github/workflows/deploy.yml` runs on every push to `master`. It builds the
@@ -108,6 +150,13 @@ there first.
 
 ---
 
+## license
+
+MIT, see `LICENSE`. Copyright Andrea Di Matteo — that covers the compiler, the
+templates, the CSS and `static/vim.js`. The posts themselves are writing, not
+software; take them as read-only.
+
 ## credit
 
-This README was written by Claude.
+This README was written by Claude. So was `static/vim.js`, the vim cursor on
+the post pages, by Claude Opus 5 — header, motions, status line and all.
