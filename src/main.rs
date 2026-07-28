@@ -463,10 +463,18 @@ fn compile_post(post: &Post) -> io::Result<()> {
 
     let content: String = post.body.iter().map(|b| b.to_string()).collect();
 
+    let title = escape_html(&post.metadata.title);
+    let date = post.metadata.date.to_string();
+
     let page = format!(
         "<!DOCTYPE html><html>{}{}</html>",
-        render(&header, &[("title", &post.metadata.title)]),
-        render(&body, &[("topbar", &topbar), ("body", &content)]),
+        render(&header, &[("title", &title)]),
+        render(&body, &[
+            ("title", &title),
+            ("date", &date),
+            ("topbar", &topbar),
+            ("body", &content),
+        ]),
     );
 
     w.write_all(page.as_bytes())?;
@@ -505,6 +513,8 @@ fn compile_index(posts: &[Post]) -> io::Result<()> {
         /*
         * tags are rendered as buttons, so they must stay *outside*
         * the post link: an <a> cannot contain interactive elements.
+        * the row is still clickable end to end, the CSS lets the link
+        * blanket the row and lifts this line back on top of it.
         *
         * the attribute is comma separated so that a tag is free to
         * contain a space without breaking the split on the JS side.
@@ -512,22 +522,27 @@ fn compile_index(posts: &[Post]) -> io::Result<()> {
         let tags: String = post.metadata.tags
             .iter()
             .map(|t| format!(
-                r#"<button class="tag" type="button" data-tag="{tag}">#{tag}</button>"#,
+                r#"<button class="tag" type="button" data-tag="{tag}">{tag}</button>"#,
                 tag = escape_html(t),
             ))
-            .collect();
+            .collect::<Vec<_>>()
+            .join(r#"<span class="sep">·</span>"#);
+
+        let meta = if tags.is_empty() {
+            String::new()
+        } else {
+            format!(r#"<div class="post-meta">{}</div>"#, tags)
+        };
 
         write!(
             &mut content,
             r#"<li class="post-item" data-name="{name}" data-date="{date}" data-tags="{tag_attr}" data-desc="{desc_attr}">
+    <time class="post-date" datetime="{date}">{date}</time>
     <a class="post-link" href="{href}">
         <h2 class="post-title">{title}</h2>
         {description}
     </a>
-    <div class="post-meta">
-        <time datetime="{date}">{date}</time>
-        {tags}
-    </div>
+    {meta}
 </li>
 "#,
             name = escape_html(&post.metadata.title),
@@ -537,7 +552,7 @@ fn compile_index(posts: &[Post]) -> io::Result<()> {
             description = description,
             desc_attr = escape_html(&post.metadata.description),
             tag_attr = escape_html(&post.metadata.tags.join(",")),
-            tags = tags,
+            meta = meta,
         )
         .unwrap();
     }
