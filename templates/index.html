@@ -59,7 +59,6 @@
     function toggleTag(tag) {
         if (active.has(tag)) active.delete(tag);
         else active.add(tag);
-         * carries it: they all have to light up together */
         for (const b of document.querySelectorAll('.tag')) {
             b.classList.toggle('is-on', active.has(b.dataset.tag));
         }
