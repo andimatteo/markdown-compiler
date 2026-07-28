@@ -1,1 +1,15 @@
-<body>{{body}}</body>
+<body>
+    {{topbar}}
+    <main class="post">
+        <header class="post-head">
+            <h1>{{title}}</h1>
+            <span class="sep">·</span>
+            <time datetime="{{date}}">{{date}}</time>
+        </header>
+        <hr class="post-rule" />
+        <article>{{body}}</article>
+        <footer class="post-footer">
+            <a href="index.html">&larr; all posts</a>
+        </footer>
+    </main>
+</body>
