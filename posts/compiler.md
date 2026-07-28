@@ -33,7 +33,7 @@ similar to actual `.md` to `.html` compilers, even Hugo itself.
 
 The compilation follows the following steps:
 
-- scan post/ dir
+- scan `post/` dir
 - for each file scan for blocks elements
 - for each block scan for inline elements
 - we then end up with an intermediate representation (building ASTs is always pretty cool):

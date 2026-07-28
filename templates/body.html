@@ -12,4 +12,30 @@
             <a href="index.html">&larr; all posts</a>
         </footer>
     </main>
+
+    <div id="vim-cursor" class="vim-cursor" hidden></div>
+
+    <div id="vim-bar" class="vim-bar" hidden>
+        <div class="vim-bar-inner">
+            <span id="vim-file" class="vim-file"></span>
+            <span id="vim-hint" class="vim-hint"><kbd>F1</kbd> keys</span>
+            <span id="vim-msg" class="vim-msg"></span>
+            <span id="vim-cmdline" class="vim-cmdline" hidden><span id="vim-sign" class="vim-sign">/</span><input id="vim-cmd" class="vim-cmd" type="text" autocomplete="off" autocorrect="off" spellcheck="false" /></span>
+            <span class="vim-ruler">
+                <span id="vim-show" class="vim-show"></span>
+                <span id="vim-pos" class="vim-pos"></span>
+                <span id="vim-pct" class="vim-pct"></span>
+            </span>
+        </div>
+    </div>
+
+    <div id="vim-help" class="vim-help" hidden>
+        <div class="vim-help-panel">
+            <h2 class="vim-help-title">keys</h2>
+            <div id="vim-help-box" class="vim-help-box"></div>
+            <p class="vim-help-foot">any key closes this</p>
+        </div>
+    </div>
+
+    <script src="static/vim.js" defer></script>
 </body>
