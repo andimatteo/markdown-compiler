@@ -454,6 +454,7 @@ fn render(template: &str, fields: &[(&str, &str)]) -> String {
 fn compile_post(post: &Post) -> io::Result<()> {
     let header = fs::read_to_string("templates/head.html")?;
     let body = fs::read_to_string("templates/body.html")?;
+    let topbar = fs::read_to_string("templates/topbar.html")?;
     let out_dir = Path::new("dist");
     fs::create_dir_all(out_dir)?;
     
@@ -465,7 +466,7 @@ fn compile_post(post: &Post) -> io::Result<()> {
     let page = format!(
         "<!DOCTYPE html><html>{}{}</html>",
         render(&header, &[("title", &post.metadata.title)]),
-        render(&body, &[("body", &content)]),
+        render(&body, &[("topbar", &topbar), ("body", &content)]),
     );
 
     w.write_all(page.as_bytes())?;
@@ -477,6 +478,7 @@ fn compile_post(post: &Post) -> io::Result<()> {
 fn compile_index(posts: &[Post]) -> io::Result<()> {
     let header = fs::read_to_string("templates/head.html")?;
     let body = fs::read_to_string("templates/index.html")?;
+    let topbar = fs::read_to_string("templates/topbar.html")?;
 
     /* should not be necessary, idempotent */
     let out_dir = Path::new("dist");
@@ -495,26 +497,47 @@ fn compile_index(posts: &[Post]) -> io::Result<()> {
             String::new()
         } else {
             format!(
-                "<p>{}</p>",
+                r#"<span class="post-desc">{}</span>"#,
                 escape_html(&post.metadata.description)
             )
         };
 
+        /*
+        * tags are rendered as buttons, so they must stay *outside*
+        * the post link: an <a> cannot contain interactive elements.
+        *
+        * the attribute is comma separated so that a tag is free to
+        * contain a space without breaking the split on the JS side.
+        * */
+        let tags: String = post.metadata.tags
+            .iter()
+            .map(|t| format!(
+                r#"<button class="tag" type="button" data-tag="{tag}">#{tag}</button>"#,
+                tag = escape_html(t),
+            ))
+            .collect();
+
         write!(
             &mut content,
-            r#"<li class="post-item" data-name="{name}" data-date="{date}">
+            r#"<li class="post-item" data-name="{name}" data-date="{date}" data-tags="{tag_attr}" data-desc="{desc_attr}">
     <a class="post-link" href="{href}">
-        <h2>{title}</h2>
-        <time datetime="{date}">{date}</time>
+        <h2 class="post-title">{title}</h2>
         {description}
     </a>
+    <div class="post-meta">
+        <time datetime="{date}">{date}</time>
+        {tags}
+    </div>
 </li>
 "#,
-            name = post.metadata.title.replace("\"","'"),
+            name = escape_html(&post.metadata.title),
             href = href,
             title = escape_html(&post.metadata.title),
             date = post.metadata.date,
             description = description,
+            desc_attr = escape_html(&post.metadata.description),
+            tag_attr = escape_html(&post.metadata.tags.join(",")),
+            tags = tags,
         )
         .unwrap();
     }
@@ -522,7 +545,7 @@ fn compile_index(posts: &[Post]) -> io::Result<()> {
     let page = format!(
         "<!DOCTYPE html><html>{}{}</html>",
         render(&header, &[("title", "index")]),
-        render(&body, &[("post-list", &content)]),
+        render(&body, &[("topbar", &topbar), ("post-list", &content)]),
     );
 
     w.write_all(page.as_bytes())?;
