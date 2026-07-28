@@ -158,5 +158,11 @@ software; take them as read-only.
 
 ## credit
 
-This README was written by Claude. So was `static/vim.js`, the vim cursor on
-the post pages, by Claude Opus 5 — header, motions, status line and all.
+This README was written by Claude Opus 5 
+
+## meta-credit
+
+Also the credit was written by Claude Opus 5. Since the html templates,
+the js and the style were out of the scope of this project, I just
+asked Claude to implement vim moves on the posts and a very
+small and clean template.
