@@ -1,5 +1,3 @@
-# andreadimatteo
-
 Hi, this is Andrea again.
 
 I'm kind of learning Rust, I thought the best way to do so was getting into a
