@@ -4,8 +4,17 @@ SHELL := /bin/bash
 POSTS_DIR := posts
 MEDIA_DIR := static
 GIF_FPS := 25
+LINK_PATH := $(word 2,$(MAKECMDGOALS))
 
-.PHONY: help post gifs
+.PHONY: help post gifs link
+
+ifeq ($(firstword $(MAKECMDGOALS)),link)
+ifneq ($(LINK_PATH),)
+.PHONY: $(LINK_PATH)
+$(LINK_PATH):
+	@:
+endif
+endif
 
 help:
 	@printf '%s\n' \
@@ -69,3 +78,24 @@ gifs:
 	if [[ $$found -eq 0 ]]; then \
 		printf 'No MP4 files found in %s\n' "$(MEDIA_DIR)"; \
 	fi
+
+link:
+	@set -euo pipefail; \
+	source="$(LINK_PATH)"; \
+	if [[ -z "$$source" ]]; then \
+		printf 'Usage: make link /path/to/directory\n' >&2; \
+		exit 1; \
+	fi; \
+	if [[ ! -d "$$source" ]]; then \
+		printf 'Directory not found: %s\n' "$$source" >&2; \
+		exit 1; \
+	fi; \
+	mkdir -p "$(POSTS_DIR)"; \
+	source="$$(cd "$$source" && pwd -P)"; \
+	destination="$(POSTS_DIR)/$$(basename "$$source")"; \
+	if [[ -e "$$destination" || -L "$$destination" ]]; then \
+		printf 'Destination already exists: %s\n' "$$destination" >&2; \
+		exit 1; \
+	fi; \
+	ln -s "$$source" "$$destination"; \
+	printf 'Created %s -> %s\n' "$$destination" "$$source"
