@@ -24,9 +24,13 @@ enum Inline {
     Italic(String),
     Bold(String),
     Code(String),
-    Link {
+    Link{
         text: String,
         url: String,
+    },
+    Image{
+        url: String,
+        alt: String,
     },
     Strikethrough(String),
 }
@@ -39,6 +43,7 @@ impl Display for Inline {
             Inline::Bold(s) => write!(f, "<strong>{}</strong>", escape_html(s)),
             Inline::Code(s) => write!(f, "<code>{}</code>", escape_html(s)),
             Inline::Link{text, url} => write!(f, "<a href=\"{}\">{}</a>", url, escape_html(text)),
+            Inline::Image{url, alt} => write!(f, "<img src=\"static/{}\" alt=\"{}\" >", url, escape_html(alt)),
             Inline::Strikethrough(s) => write!(f, "<del>{}</del>", escape_html(s)),
         }
     }
@@ -291,8 +296,11 @@ fn parse_inline(s: &str) -> Vec<Inline> {
 
     let mut i = 0;
     let mut text_start = 0;
+    let mut image;
 
     while i < s.len() {
+        image = false;
+
         let delimiter = if s[i..].starts_with("**") {
             Some("**")
         } else if s[i..].starts_with('*') {
@@ -301,6 +309,9 @@ fn parse_inline(s: &str) -> Vec<Inline> {
             Some("~")
         } else if s[i..].starts_with('`') {
             Some("`")
+        } else if s[i..].starts_with("![") {
+            image = true;
+            Some("![")
         } else if s[i..].starts_with('[') {
             Some("[")
         } else {
@@ -315,9 +326,8 @@ fn parse_inline(s: &str) -> Vec<Inline> {
             * of delimiter. In the case of images of links the ending
             * delimiter is different from starting one.
             * */
-            
             let end_delimiter = match delimiter {
-                "[" => "]",
+                "![" | "[" => "]",
                 d => d,
             };
 
@@ -337,7 +347,7 @@ fn parse_inline(s: &str) -> Vec<Inline> {
                     "*" => result.push(Inline::Italic(content)),
                     "~" => result.push(Inline::Strikethrough(content)),
                     "`" => result.push(Inline::Code(content)),
-                    "[" => {
+                    "[" | "![" => {
                         /*
                         * well well well.
                         * Now we must check if there is delimited
@@ -346,22 +356,29 @@ fn parse_inline(s: &str) -> Vec<Inline> {
                         * if that isn't the case we will just push this
                         * into text.
                         * */
-                        if !s[content_end + 1..].starts_with("(") {
-                            result.push(Inline::Text(content))
+
+                        if !s[content_end + 1..].starts_with('(') {
+                            result.push(Inline::Text(content));
                         } else {
                             let url_begin = content_end + 2;
 
-                            if let Some(relative_url_end) = s[url_begin..].find(")") {
+                            if let Some(relative_url_end) = s[url_begin..].find(')') {
                                 let url_end = url_begin + relative_url_end;
-
                                 let url = s[url_begin..url_end].to_owned();
 
-                                result.push(Inline::Link{ text: content, url });
+                                if image {
+                                    result.push(Inline::Image { url, alt: content });
+                                } else {
+                                    result.push(Inline::Link {
+                                        text: content,
+                                        url,
+                                    });
+                                }
 
                                 content_end = url_end;
                             }
                         }
-                    },
+                    }
                     _ => unreachable!(),
                 }
 
