@@ -12,6 +12,8 @@
     --link-visit: #551a8b;
 
     --accent:     #a03c00;
+    --search:     #ffe08a;
+    --search-fg:  #111111;
 
     --topbar-h: calc(3em + 1px);
     --col: 54em;
@@ -37,6 +39,8 @@
     --link-visit: #c3a1f0;
 
     --accent:     #ff9552;
+    --search:     #b58900;
+    --search-fg:  #101010;
 }
 
 *,
@@ -449,3 +453,230 @@ hr {
 }
 
 .post-footer a { color: var(--muted); }
+
+::selection {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+::highlight(vim-search) {
+    background: var(--search);
+    color: var(--search-fg);
+}
+
+/*
+* the cursor is a box laid over one character, inverting whatever is
+* underneath it — which is how a block cursor looks in a terminal, and
+* keeps it legible on the page background, on code and on a selection.
+* */
+.vim-cursor {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 8;
+
+    pointer-events: none;
+    -webkit-backdrop-filter: invert(1);
+    backdrop-filter: invert(1);
+}
+
+@supports not ((backdrop-filter: invert(1)) or (-webkit-backdrop-filter: invert(1))) {
+    .vim-cursor {
+        background: var(--accent);
+        opacity: 0.4;
+    }
+}
+
+.vim-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+
+    background: var(--bg);
+    border-top: 1px solid var(--rule);
+    font-size: 0.8em;
+    line-height: 1.9;
+}
+
+.vim-bar-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.9em;
+
+    height: 2.2em;
+    padding: 0 1em;
+
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* the command line takes the whole bar, the way vim's does */
+.vim-bar.is-cmd .vim-file,
+.vim-bar.is-cmd .vim-hint,
+.vim-bar.is-cmd .vim-msg { display: none; }
+
+.vim-file { color: var(--muted); }
+
+.vim-hint { color: var(--faint); }
+
+.vim-hint kbd {
+    font-family: inherit;
+    font-size: 1em;
+    color: var(--muted);
+    border: 1px solid var(--rule);
+    padding: 0 0.3em;
+}
+
+.vim-msg { color: var(--fg); }
+.vim-msg:empty { display: none; }
+.vim-msg.is-error { color: var(--accent); }
+.vim-msg.is-warn { color: var(--muted); }
+.vim-msg.is-mode { font-weight: 700; }
+
+.vim-cmdline {
+    display: flex;
+    align-items: center;
+    gap: 0.1em;
+    flex: 1;
+    min-width: 0;
+}
+
+.vim-cmd {
+    flex: 1;
+    min-width: 0;
+    -webkit-appearance: none;
+    appearance: none;
+
+    /* the shorthand, so the input cannot fall back to the UA font */
+    font: inherit;
+    color: var(--fg);
+    caret-color: var(--fg);
+
+    background: none;
+    border: 0;
+    outline: none;
+    padding: 0;
+    margin: 0;
+    height: 1.6em;
+}
+
+.vim-ruler {
+    display: flex;
+    gap: 1.4em;
+    margin-left: auto;
+
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.vim-show {
+    min-width: 3em;
+    text-align: right;
+    color: var(--faint);
+}
+
+.vim-pos { min-width: 5em; }
+
+.vim-pct {
+    min-width: 2.5em;
+    text-align: right;
+}
+
+.vim-help {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2em 1.2em;
+
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+}
+
+.vim-help-panel {
+    max-width: var(--col);
+    max-height: 100%;
+    overflow-y: auto;
+
+    padding: 1.3em 1.5em;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+}
+
+.vim-help-title {
+    margin: 0 0 0.9em;
+    font-size: 1em;
+}
+
+.vim-help-title::before {
+    content: "~ ";
+    color: var(--faint);
+    font-weight: 400;
+}
+
+.vim-help-box {
+    columns: 2;
+    column-gap: 2.4em;
+    font-size: 0.85em;
+}
+
+.vim-help-box section {
+    break-inside: avoid;
+    margin: 0 0 1.1em;
+}
+
+.vim-help-box h3 {
+    margin: 0 0 0.35em;
+    font-size: 1em;
+    font-weight: 400;
+    color: var(--faint);
+}
+
+.vim-help-box dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 1.2em;
+    row-gap: 0.2em;
+    margin: 0;
+}
+
+.vim-help-box dt {
+    display: flex;
+    gap: 0.3em;
+}
+
+.vim-help-box dd {
+    margin: 0;
+    color: var(--muted);
+}
+
+.vim-help-box kbd {
+    font-family: inherit;
+    font-size: 1em;
+    color: var(--fg);
+    border: 1px solid var(--rule);
+    padding: 0 0.3em;
+}
+
+.vim-help-foot {
+    margin: 0.6em 0 0;
+    padding-top: 0.7em;
+    border-top: 1px solid var(--rule-soft);
+
+    font-size: 0.75em;
+    color: var(--faint);
+}
+
+@media (max-width: 34em) {
+    .vim-help-box { columns: 1; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .vim-cursor,
+    .vim-bar,
+    .vim-help { display: none !important; }
+}
