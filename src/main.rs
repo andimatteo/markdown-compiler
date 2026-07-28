@@ -172,7 +172,7 @@ impl Display for Block {
                 write!(
                     f,
                     "<pre><code>{}</code></pre>",
-                    escape_html(content.trim())
+                    escape_html(content.trim_end_matches('\n'))
                 )
             },
             Block::NoBlock => {
@@ -673,7 +673,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for line in lines {
             let line = line?;
             let line_trimmed = line.trim();
-            let (new_block, new_line) =
+            let (new_block, new_line): (BlockKind, Option<&str>) =
             match line_trimmed {
                 /*
                 * must check first if we are opening or closing
@@ -681,58 +681,69 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 * */
                 l if l.starts_with("```") || l.starts_with("~~~") => {
                     is_code = !is_code;
-                    if is_code { (BlockKind::CodeBlock,"") } else { (BlockKind::NoBlock,"") }
+
+                    if is_code {
+                        (BlockKind::CodeBlock, None)
+                    } else {
+                        (BlockKind::NoBlock, None)
+                    }
                 },
                 /*
                 * if we are in a codeblock then we are in a codeblock, period.
                 * */
-                l if is_code => (BlockKind::CodeBlock,l),
+                _ if is_code => (
+                    BlockKind::CodeBlock,
+                    Some(line.as_str()),
+                ),
                 l if l.starts_with("###### ") => {
                     (
                         BlockKind::Heading(Heading::H6),
-                        &l[7..],
+                        Some(&l[7..]),
                     )
                 },
                 l if l.starts_with("##### ") => {
                     (
                         BlockKind::Heading(Heading::H5),
-                        &l[6..],
+                        Some(&l[6..]),
                     )
                 },
                 l if l.starts_with("#### ") => {
                     (
                         BlockKind::Heading(Heading::H4),
-                        &l[5..],
+                        Some(&l[5..]),
                     )
                 },
                 l if l.starts_with("### ") => {
                     (
                         BlockKind::Heading(Heading::H3),
-                        &l[4..],
+                        Some(&l[4..]),
                     )
                 },
                 l if l.starts_with("## ") => {
                     (
                         BlockKind::Heading(Heading::H2),
-                        &l[3..],
+                        Some(&l[3..]),
                     )
                 },
                 l if l.starts_with("# ") => {
                     (
                         BlockKind::Heading(Heading::H1),
-                        &l[2..],
+                        Some(&l[2..]),
                     )
                 },
                 l if l.starts_with("> ") => {
                     (
                         BlockKind::BlockQuote,
-                        &l[2..],
+                        Some(&l[2..]),
                     )
                 },
-                l if l.starts_with("- ") || l.starts_with("* ") || l.starts_with("+ ") => {
+                l if l.starts_with("- ")
+                || l.starts_with("* ")
+                || l.starts_with("+ ") =>
+                {
                     (
                         BlockKind::UnorderedList,
-                        &l[2..],
+                        Some(&l[2..]),
                     )
                 },
                 /*
@@ -755,18 +766,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     (
                         BlockKind::Orderedlist,
-                        l[d + 1..].trim_start(),
+                        Some(l[d + 1..].trim_start()),
                     )
                 },
                 l if l.is_empty() => {
                     (
                         BlockKind::NoBlock,
-                        "",
+                        None,
                     )
                 }
                 l => {
                     (
-                        BlockKind::Paragraph,l
+                        BlockKind::Paragraph,
+                        Some(l),
                     )
                 }
             };
@@ -793,8 +805,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 current_block_content = String::new();
                 current_block = new_block;
             }
-            current_block_content.push_str(new_line);
-            current_block_content.push('\n');
+            if let Some(new_line) = new_line {
+                current_block_content.push_str(new_line);
+                current_block_content.push('\n');
+            }
         }
 
         /*
