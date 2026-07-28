@@ -1,113 +1,201 @@
-<style>
-.search-wrap {
-    margin: 1.5em 0 2em;
-}
-
-#searchbar {
-    display: block;
-    width: 100%;
-    box-sizing: border-box;
-
-    font-family: inherit;
-    font-size: 1.05em;
-    line-height: 1.5;
-    color: #111;
-
-    padding: 0.85em 3em 0.85em 1.1em;
-
-    background-color: #fff;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.8-3.8'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 1.1em center;
-    background-size: 1.15em;
-
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    outline: none;
-    transition: border-color .12s ease;
-}
-
-#searchbar::placeholder {
-    color: #999;
-}
-
-#searchbar:hover {
-    border-color: #ccc;
-}
-
-#searchbar:focus {
-    border-color: #111;
-}
-
-#searchbar::-webkit-search-cancel-button {
-    -webkit-appearance: none;
-    width: 0.9em;
-    height: 0.9em;
-    margin-right: 0.4em;
-    cursor: pointer;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='%23555' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M5 5l14 14M19 5L5 19'/%3E%3C/svg%3E") center/contain no-repeat;
-}
-
-#list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-#list li {
-    padding: 0.7em 1.1em;
-    border-bottom: 1px solid #eee;
-}
-
-#list li:first-child {
-    border-top: 1px solid #eee;
-}
-</style>
 <body>
-    <div class="search-wrap">
-        <input type="search" id="searchbar" placeholder="Search…    /" autocomplete="off" />
-    </div>
-    <ul id="list">
-        {{post-list}}
-    </ul>
-</body>
-<script>
-/*
-TODO:
-implement VIM moves for moving between posts
+    {{topbar}}
+    <main class="index">
+        <div class="search-wrap">
+            <div class="search-box">
+                <input type="search" id="searchbar" placeholder="search posts…" autocomplete="off" />
+                <span class="search-icon" aria-hidden="true"></span>
+            </div>
+            <div id="tagbar" class="tagbar" hidden><span class="tagbar-label"></span><span id="tagbar-tags"></span><button type="button" id="tagclear" class="tag-clear" hidden>clear</button></div>
+        </div>
+        <ul id="list">
+            {{post-list}}
+        </ul>
+        <p id="empty" class="empty" hidden>Nothing matches.</p>
+        <p class="hints">
+            <kbd>j</kbd><kbd>k</kbd> move ·
+            <kbd>gg</kbd><kbd>G</kbd> top/bottom ·
+            <kbd>↵</kbd> open ·
+            <kbd>/</kbd> search ·
+            <kbd>t</kbd> theme ·
+            <kbd>esc</kbd> reset
+        </p>
+    </main>
+    <script>
+    const sb       = document.getElementById('searchbar');
+    const empty    = document.getElementById('empty');
+    const tagbar   = document.getElementById('tagbar');
+    const tagtags  = document.getElementById('tagbar-tags');
+    const tagclear = document.getElementById('tagclear');
+    const items    = [...document.querySelectorAll('#list li')];
 
-TODO:
-implement also move with TAB along posts
-MAIUSC + TAB will move you up and down
+    const norm    = (s) => (s || '').toLowerCase().trim();
+    const tagsOf  = (li) => (li.dataset.tags || '').split(',').filter(Boolean);
+    const visible = () => items.filter((li) => !li.hidden);
+    const active = new Set();
 
-TODO:
-implement move with arrows up and down
+    function matches(li) {
+        const tags = tagsOf(li);
+        for (const t of active) {
+            if (!tags.includes(t)) return false;
+        }
 
-NOTE:
-these moves should use all same interface:
-    - move up
-    - move down
-    - move top
-    - move bottom
-*/
-const sb = document.getElementById('searchbar');
-const items = [...document.querySelectorAll('#list li')]
-const norm = (s) => s.toLowerCase().trim();
-sb.addEventListener('input', (e) => {
-    const text = norm(sb.value);
-    for (const li of items) {
-        const k = norm(li.dataset.name);
-        li.hidden = text != '' && !k.includes(text);
+        const q = norm(sb.value);
+        if (q === '') return true;
+
+        return [li.dataset.name, li.dataset.desc, tags.join(' ')]
+            .map(norm)
+            .join(' ')
+            .includes(q);
     }
-});
-document.addEventListener('keydown', (e) => {
-    if (e.key !== '/') return;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const a = document.activeElement;
-    if (a == sb) return;
 
-    e.preventDefault();
-    sb.focus();
-    sb.select();
-});
-</script>
+    function apply() {
+        for (const li of items) li.hidden = !matches(li);
+        const vis = visible();
+        empty.hidden = vis.length > 0;
+        if (current && current.hidden) select(vis[0] || null);
+    }
+
+    function toggleTag(tag) {
+        if (active.has(tag)) active.delete(tag);
+        else active.add(tag);
+         * carries it: they all have to light up together */
+        for (const b of document.querySelectorAll('.tag')) {
+            b.classList.toggle('is-on', active.has(b.dataset.tag));
+        }
+        tagclear.hidden = active.size === 0;
+        apply();
+    }
+
+    const allTags = [...new Set(items.flatMap(tagsOf))].sort();
+
+    allTags.forEach((tag, i) => {
+        if (i > 0) {
+            const sep = document.createElement('span');
+            sep.className = 'sep';
+            sep.textContent = '·';
+            tagtags.append(sep);
+        }
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'tag';
+        b.dataset.tag = tag;
+        b.textContent = tag;
+        tagtags.append(b);
+    });
+
+    tagbar.hidden = allTags.length === 0;
+
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('#tagclear')) {
+            for (const t of [...active]) toggleTag(t);
+            return;
+        }
+
+        const b = e.target.closest('.tag');
+        if (!b) return;
+        e.preventDefault();
+        toggleTag(b.dataset.tag);
+    });
+
+    sb.addEventListener('input', apply);
+
+    let current = null;
+
+    function select(li) {
+        if (current) current.classList.remove('is-active');
+        current = li;
+        if (!li) return;
+        li.classList.add('is-active');
+        li.scrollIntoView({ block: 'nearest' });
+    }
+
+    function move(dir) {
+        const vis = visible();
+        if (vis.length === 0) return;
+
+        const i = current ? vis.indexOf(current) : -1;
+        let next;
+
+        switch (dir) {
+            case 'top':    next = 0; break;
+            case 'bottom': next = vis.length - 1; break;
+            case 'up':     next = i <= 0 ? 0 : i - 1; break;
+            case 'down':   next = i < 0 ? 0 : Math.min(i + 1, vis.length - 1); break;
+        }
+
+        select(vis[next]);
+    }
+
+    function open() {
+        const a = current && current.querySelector('.post-link');
+        if (a) window.location.href = a.href;
+    }
+
+    let pendingG = false;
+
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+        const searching = document.activeElement === sb;
+
+        if (e.key === '/' && !searching) {
+            e.preventDefault();
+            sb.focus();
+            sb.select();
+            return;
+        }
+
+        if (e.key === 'Escape') {
+            if (searching) {
+                sb.value = '';
+                apply();
+                sb.blur();
+            } else {
+                for (const t of [...active]) toggleTag(t);
+            }
+            return;
+        }
+
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            move(e.shiftKey ? 'up' : 'down');
+            return;
+        }
+
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (searching) {
+                sb.blur();
+                if (!current) move('top');
+            } else {
+                open();
+            }
+            return;
+        }
+
+        if (e.key === 'ArrowDown') { e.preventDefault(); move('down'); return; }
+        if (e.key === 'ArrowUp')   { e.preventDefault(); move('up');   return; }
+
+        if (searching) return;
+
+        switch (e.key) {
+            case 'j': e.preventDefault(); move('down');   break;
+            case 'k': e.preventDefault(); move('up');     break;
+            case 'G': e.preventDefault(); move('bottom'); break;
+            case 'o': e.preventDefault(); open();         break;
+            case 'g':
+                e.preventDefault();
+                if (!pendingG) {
+                    pendingG = true;
+                    setTimeout(() => { pendingG = false; }, 500);
+                    return;
+                }
+                move('top');
+                break;
+        }
+
+        pendingG = false;
+    });
+    </script>
+</body>

@@ -3,4 +3,82 @@
     <meta name="viewport" content="width=device-width" />
     <title>{{title}}</title>
     <link rel="stylesheet" href="static/style.css" />
+    <script>
+    (function () {
+const KEY  = 'theme';
+const root = document.documentElement;
+
+const store = (function () {
+try {
+localStorage.setItem(KEY + ':probe', '1');
+localStorage.removeItem(KEY + ':probe');
+return localStorage;
+} catch (e) {
+return null;
+}
+})();
+
+const system = () =>
+window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+const url = new URL(location.href);
+
+let theme = url.searchParams.get(KEY)
+|| (store && store.getItem(KEY))
+|| system();
+
+function apply(t) {
+theme = t;
+root.setAttribute('data-theme', t);
+
+if (store) {
+try { store.setItem(KEY, t); } catch (e) {}
+return;
+}
+
+url.searchParams.set(KEY, t);
+try { history.replaceState(null, '', url); } catch (e) {}
+}
+
+apply(theme);
+
+window.addEventListener('storage', (e) => {
+if (e.key !== KEY || !e.newValue || e.newValue === theme) return;
+theme = e.newValue;
+root.setAttribute('data-theme', theme);
+});
+
+if (!store) {
+document.addEventListener('click', (e) => {
+if (e.defaultPrevented || e.button !== 0) return;
+if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
+const a = e.target.closest('a[href]');
+if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+
+const href = a.getAttribute('href');
+if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//') || href.startsWith('#')) {
+return;
+}
+
+const dest = new URL(href, location.href);
+dest.searchParams.set(KEY, theme);
+
+e.preventDefault();
+location.href = dest.href;
+});
+}
+
+document.addEventListener('keydown', (e) => {
+if (e.key !== 't' || e.ctrlKey || e.metaKey || e.altKey) return;
+
+const el = document.activeElement;
+if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) {
+return;
+}
+
+apply(theme === 'dark' ? 'light' : 'dark');
+});
+    })();
+    </script>
 </head>
