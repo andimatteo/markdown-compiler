@@ -3,6 +3,15 @@ name: deploy
 on:
   push:
     branches: [master]
+    # only rebuild when something the site is actually built from changes
+    paths:
+      - 'posts/**'
+      - 'static/**'
+      - 'templates/**'
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 # GITHUB_TOKEN permissions needed by actions/deploy-pages
