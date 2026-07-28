@@ -1,7 +1,10 @@
 use core::fmt::{self, Display};
+use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Formatter;
 use std::fs;
 use std::fs::File;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use fs_extra::dir::{copy, CopyOptions};
 use std::io::{self, BufRead, BufReader, BufWriter};
 use std::fmt::Write as FmtWrite;
@@ -10,11 +13,14 @@ use std::path::Path;
 use std::thread::current;
 use serde::{Deserialize};
 use std::mem::{discriminant, take};
-
 use chrono::NaiveDate;
-use regex::{Regex, escape};
 
-#[derive(Debug)]
+
+/*
+* structure for representing
+* inline elements
+* */
+#[derive(Debug, PartialEq, Eq)]
 enum Inline {
     Text(String),
     Italic(String),
@@ -30,26 +36,20 @@ enum Inline {
 impl Display for Inline {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Inline::Text(s) => write!(f, "{}", escape(s.trim())),
-            Inline::Italic(s) => write!(f, "<em>{}</em>", escape(s.trim())),
-            Inline::Bold(s) => write!(f, "<strong>{}</strong>", escape(s.trim())),
-            Inline::Code(s) => write!(f, "<code>{}</code>", escape(s.trim())),
-            Inline::Link{text, url} => write!(f, "<a href=\"{}\">{}</a>", url, escape(text)),
-            Inline::Strikethrough(s) => write!(f, "<del>{}</del>", escape(s.trim())),
+            Inline::Text(s) => write!(f, "{}", escape_html(s)),
+            Inline::Italic(s) => write!(f, "<em>{}</em>", escape_html(s)),
+            Inline::Bold(s) => write!(f, "<strong>{}</strong>", escape_html(s)),
+            Inline::Code(s) => write!(f, "<code>{}</code>", escape_html(s)),
+            Inline::Link{text, url} => write!(f, "<a href=\"{}\">{}</a>", url, escape_html(text)),
+            Inline::Strikethrough(s) => write!(f, "<del>{}</del>", escape_html(s)),
         }
     }
 }
 
 
+/* enum for representing admissible heading types */
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Heading{
-    H1,
-    H2,
-    H3,
-    H4,
-    H5,
-    H6
-}
+enum Heading{ H1, H2, H3, H4, H5, H6 }
 
 impl Heading {
     fn level(&self) -> u8 {
@@ -60,6 +60,11 @@ impl Heading {
     }
 }
 
+/*
+* this is a utility enum for defining the current
+* context: when parsing our context can be in one
+* of the following admissible states
+* */
 enum BlockKind{
     Heading(Heading),
     Paragraph,
@@ -77,7 +82,12 @@ impl PartialEq for BlockKind {
     }
 }
 
-#[derive(Debug)]
+/*
+* this is the actual enum for representing
+* block elements in the intermediate
+* representation format
+* */
+#[derive(Debug, PartialEq, Eq)]
 enum Block {
     Heading {
         level: Heading,
@@ -108,7 +118,8 @@ impl Display for Block {
                     content
                         .iter()
                         .map(|i| i.to_string())
-                        .collect::<Vec<_>>().join(" "),
+                        .collect::<Vec<_>>()
+                        .join(""),
                     l
                 )
             },
@@ -120,7 +131,7 @@ impl Display for Block {
                         .iter()
                         .map(|i| format!("<li>{}</li>", i))
                         .collect::<Vec<_>>()
-                        .join(" ")
+                        .join("")
                 )
             },
             Block::UnorderedList{ lines, content } => {
@@ -131,7 +142,7 @@ impl Display for Block {
                         .iter()
                         .map(|i| format!("<li>{}</li>", i))
                         .collect::<Vec<_>>()
-                        .join(" ")
+                        .join("")
                 )
             },
             Block::BlockQuote(content) => {
@@ -142,7 +153,7 @@ impl Display for Block {
                         .iter()
                         .map(|i| i.to_string())
                         .collect::<Vec<_>>()
-                        .join(" ")
+                        .join("")
                 )
             },
             Block::Paragraph(content) => {
@@ -153,14 +164,14 @@ impl Display for Block {
                         .iter()
                         .map(|i| i.to_string())
                         .collect::<Vec<_>>()
-                        .join(" ")
+                        .join("")
                 )
             },
             Block::CodeBlock(content) => {
                 write!(
                     f,
                     "<pre><code>{}</code></pre>",
-                    content
+                    escape_html(content.trim())
                 )
             },
             Block::NoBlock => {
@@ -170,7 +181,26 @@ impl Display for Block {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(PartialEq, Eq)]
+struct Post {
+    file_name : String,
+    metadata : PostMetadata,
+    body: Vec<Block>,
+}
+
+impl Ord for Post {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.metadata.date.cmp(&self.metadata.date)
+    }
+}
+
+impl PartialOrd for Post {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[derive(Deserialize,PartialEq, Eq)]
 struct PostMetadata {
     title: String,
     date: NaiveDate,
@@ -182,11 +212,9 @@ struct PostMetadata {
     draft: bool,
 }
 
-struct Post {
-    metadata : PostMetadata,
-    body: Vec<Block>,
-}
-
+/*
+* utility functions
+* */
 fn skip_blank<I: Iterator<Item = std::io::Result<String>>>(lines: &mut std::iter::Peekable<I>) {
     while let Some(Ok(line)) = lines.peek() {
         if line.trim().trim_end().is_empty() {
@@ -194,6 +222,78 @@ fn skip_blank<I: Iterator<Item = std::io::Result<String>>>(lines: &mut std::iter
         } else {
             break;
         }
+    }
+}
+
+/*
+* simple function to return the slug
+* of a name
+* */
+fn slugify(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut pending_dash = false;
+
+    let push = |out: &mut String, txt: &str, pending: &mut bool| {
+        if *pending && !out.is_empty() { out.push('-'); }
+        *pending = false;
+        out.push_str(txt);
+    };
+
+    for c in s.chars() {
+        let repl: Option<&str> = match c {
+            'à'|'á'|'â'|'ã'|'ä'|'å' => Some("a"),
+            'è'|'é'|'ê'|'ë'         => Some("e"),
+            'ì'|'í'|'î'|'ï'         => Some("i"),
+            'ò'|'ó'|'ô'|'õ'|'ö'|'ø' => Some("o"),
+            'ù'|'ú'|'û'|'ü'         => Some("u"),
+            'ç' => Some("c"),
+            'ñ' => Some("n"),
+            'ß' => Some("ss"),
+            'æ' => Some("ae"),
+            'œ' => Some("oe"),
+            _ => None,
+        };
+
+        match repl {
+            Some(r) => push(&mut out, r, &mut pending_dash),
+            None if c.is_ascii_alphanumeric() => {
+                let lower = c.to_ascii_lowercase();
+                push(&mut out, lower.encode_utf8(&mut [0u8; 4]), &mut pending_dash);
+            }
+            None => pending_dash = true,
+        }
+    }
+    out
+}
+
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+/*
+* TODO:
+* now that we are so proud of adding collision detection
+* on the names we must also keep the name of the file inside
+* the metadata, otherwise we cannot retrieve the correct
+* name from just the title name...
+* */
+fn unique_name(base: &str, counts: &mut HashMap<String,usize>, used: &mut HashSet<String>) -> String {
+    let n = counts.entry(base.to_string()).or_insert(0);
+    loop {
+        let name = if *n == 0 {
+            format!("{base}.html")
+        } else {
+            format!("{base}-{n}.html")
+        };
+
+        if used.insert(name.clone()) {
+            return name;
+        }
+        *n += 1;
     }
 }
 
@@ -212,15 +312,28 @@ fn parse_inline(s: &str) -> Vec<Inline> {
             Some("~")
         } else if s[i..].starts_with('`') {
             Some("`")
+        } else if s[i..].starts_with('[') {
+            Some("[")
         } else {
             None
         };
 
         if let Some(delimiter) = delimiter {
             let content_start = i + delimiter.len();
+            
+            /* 
+            * if current char is a delimiter then find next occurrence
+            * of delimiter. In the case of images of links the ending
+            * delimiter is different from starting one.
+            * */
+            
+            let end_delimiter = match delimiter {
+                "[" => "]",
+                d => d,
+            };
 
-            if let Some(relative_end) = s[content_start..].find(delimiter) {
-                let content_end = content_start + relative_end;
+            if let Some(relative_end) = s[content_start..].find(end_delimiter) {
+                let mut content_end = content_start + relative_end;
 
                 if text_start < i {
                     result.push(Inline::Text(
@@ -235,6 +348,31 @@ fn parse_inline(s: &str) -> Vec<Inline> {
                     "*" => result.push(Inline::Italic(content)),
                     "~" => result.push(Inline::Strikethrough(content)),
                     "`" => result.push(Inline::Code(content)),
+                    "[" => {
+                        /*
+                        * well well well.
+                        * Now we must check if there is delimited
+                        * region made of [ ] afer, this will
+                        * be the actual URL.
+                        * if that isn't the case we will just push this
+                        * into text.
+                        * */
+                        if !s[content_end + 1..].starts_with("(") {
+                            result.push(Inline::Text(content))
+                        } else {
+                            let url_begin = content_end + 2;
+
+                            if let Some(relative_url_end) = s[url_begin..].find(")") {
+                                let url_end = url_begin + relative_url_end;
+
+                                let url = s[url_begin..url_end].to_owned();
+
+                                result.push(Inline::Link{ text: content, url });
+
+                                content_end = url_end;
+                            }
+                        }
+                    },
                     _ => unreachable!(),
                 }
 
@@ -305,47 +443,14 @@ fn render(template: &str, fields: &[(&str, &str)]) -> String {
     out
 }
 
-/*
-* very simple function that
-* given the post title returns normalized name
-* */
-fn normalize(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | ' ' => '_',
-            c if (c as u32) < 0x20 => '_',
-            c => c,
-        })
-        .collect::<String>()
-        .to_lowercase()
-}
-
-fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
-
-/*
-* very simple function that
-* given the post title returns file name
-* */
-fn file_name(s: &str) -> String {
-    format!("{}.html", normalize(s))
-}
-
 fn compile_post(post: &Post) -> io::Result<()> {
     let header = fs::read_to_string("templates/head.html")?;
     let body = fs::read_to_string("templates/body.html")?;
     let out_dir = Path::new("dist");
-    let _ = fs::create_dir_all(out_dir);
+    fs::create_dir_all(out_dir)?;
     
     /* clean filename from unwanted chars */
-    let out_file_name: String = file_name(&post.metadata.title);
-
-    let mut w = BufWriter::new(File::create(out_dir.join(out_file_name))?);
+    let mut w = BufWriter::new(File::create(out_dir.join(&post.file_name))?);
 
     let content: String = post.body.iter().map(|b| b.to_string()).collect();
 
@@ -376,7 +481,7 @@ fn compile_index(posts: &[Post]) -> io::Result<()> {
     let mut content = String::new();
 
     for post in posts {
-        let href = file_name(&post.metadata.title);
+        let href = &post.file_name;
 
         let description = if post.metadata.description.is_empty() {
             String::new()
@@ -397,7 +502,7 @@ fn compile_index(posts: &[Post]) -> io::Result<()> {
     </a>
 </li>
 "#,
-            name = post.metadata.title,
+            name = post.metadata.title.replace("\"","'"),
             href = href,
             title = escape_html(&post.metadata.title),
             date = post.metadata.date,
@@ -432,9 +537,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let files: Vec<_> = fs::read_dir("posts/")?
         .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.is_file())
+        .map(|e| e.path())
+        .filter(|p| p.is_file())
+        .filter(|p| p.extension().is_some_and(|e| e == "md"))
         .collect();
+    let mut counts = HashMap::<String,usize>::new();
+    let mut used = HashSet::<String>::new();
 
     /* 
     * the idea of this parser is the following:
@@ -639,7 +747,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         * NOTE:
         * now we have completely parsed the .md file
         * */
+        // println!("{:#?}",body);
         let post = Post {
+            file_name: unique_name(&slugify(&metadata.title).to_string(),&mut counts, &mut used),
             metadata,
             body
         };
@@ -649,13 +759,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         * could also async defer this operation
         * to another thread
         * */
-        let _ = compile_post(&post);
+        compile_post(&post)?;
         posts.push(post);
     }
+    
+    posts.sort_by_key(|p| p.metadata.date);
+    compile_index(&posts)?;
 
-    compile_index(&posts);
-
-    let _ = move_static();
+    move_static()?;
 
     Ok(())
 }
