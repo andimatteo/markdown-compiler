@@ -127,4 +127,5 @@ You can navigate through posts and within posts with vim-like-moves
 (this is vibe-coded and theme dependent, hence I won't keep track of it
 ~try it, it's pretty cool, you can also yank text :)~ ). Don't think this
 tool will ever be useful for anyone besides me, but it
-was fun to make and surely will expand.
+was fun to make and surely will expand, the code can be found at
+[this repo](https://github.com/andimatteo/markdown-compiler).
