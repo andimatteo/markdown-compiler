@@ -109,8 +109,8 @@ entirely. This is the list of the current CommonMark coverage:
 - headings: `#` through `######`
 - paragraphs: blocks of text separated by an empty line
 - codeblocks: ``` or ~~~
-- ordered lists: `- [text]`
-- unordered list: `n) [text]` or `n. [text]`
+- unordered lists: `- [text]`
+- ordered list: `n) [text]` or `n. [text]`
 - blockquotes: `> quote`
 - inline code: `code`
 - inline strikethrough: ~text~
@@ -119,13 +119,16 @@ entirely. This is the list of the current CommonMark coverage:
 - links: [text](url)
 - images: ![alt](url), images url refer to `static/` dir.
 
-The `index.html` is the whole post list, no pagination and no client side
+
+ The `index.html` is the whole post list, no pagination and no client side
 router, filtering can be done through the searhc bar on top of the page,
 (shortcut to searchbar is `/` and search text can be deleted with `esc`),
 or the tags on the single posts or still on top of page.
 You can navigate through posts and within posts with vim-like-moves
 (this is vibe-coded and theme dependent, hence I won't keep track of it
-~try it, it's pretty cool, you can also yank text :)~ ). Don't think this
+~try it, it's pretty cool, you can also yank text :)~ ). It's really early
+stage, so be careful with `.md` syntax, for instance split every block element
+ with an empty line, don't have comprehensive tests for now.Don't think this
 tool will ever be useful for anyone besides me, but it
 was fun to make and surely will expand, the code can be found at
 [this repo](https://github.com/andimatteo/markdown-compiler).
