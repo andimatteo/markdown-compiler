@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 POSTS_DIR := posts
 MEDIA_DIR := static
-GIF_FPS := 25
+GIF_FPS := 18
 LINK_PATH := $(word 2,$(MAKECMDGOALS))
 
 .PHONY: help post gifs link
