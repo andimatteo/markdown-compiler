@@ -37,7 +37,7 @@ generates an `index.html` and finally copies
 ## Makefile
 
 This is temporary and shouldn't apply to anyone beside me. It is
-a bunchful commands I wrote for simplicity:
+a bunch of commands I wrote for simplicity:
 
 - `make post` => prompt for creating a post template
 - `make gifs` => convert all `.mp4` files under `static/` to a `gif`. Needs
