@@ -87,6 +87,44 @@ Here's a demo of the generated `index` and a couple posts.
 
 ![demo](posts.gif)
 
-Don't think this tool will ever be useful for anyone besides me, but it
-was fun to make and surely will expand.
+Let's now delve into some more technicalities:
+Every post starts with a YAML front matter block delimited by `---`:
 
+```markdown
+---
+title: Building a markdown compiler
+date: 2026-07-27
+description: A short line shown in the index
+tags: [rust, web]
+draft: false
+---
+
+[markdown body]
+```
+
+`title` and `date` are required, the rest are optional. `date` is `YYYY-MM-DD`
+and drives the ordering of the index. Setting `draft: true` skips the post
+entirely. This is the list of the current CommonMark coverage:
+
+- headings: `#` through `######`
+- paragraphs: blocks of text separated by an empty line
+- codeblocks: ``` or ~~~
+- ordered lists: `- [text]`
+- unordered list: `n) [text]` or `n. [text]`
+- blockquotes: `> quote`
+- inline code: `code`
+- inline strikethrough: ~text~
+- inline bold: **text**
+- inline italic: *text*
+- links: [text](url)
+- images: ![alt](url), images url refer to `static/` dir.
+
+The `index.html` is the whole post list, no pagination and no client side
+router, filtering can be done through the searhc bar on top of the page,
+(shortcut to searchbar is `/` and search text can be deleted with `esc`),
+or the tags on the single posts or still on top of page.
+You can navigate through posts and within posts with vim-like-moves
+(this is vibe-coded and theme dependent, hence I won't keep track of it
+~try it, it's pretty cool, you can also yank text :)~ ). Don't think this
+tool will ever be useful for anyone besides me, but it
+was fun to make and surely will expand.
