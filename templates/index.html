@@ -101,12 +101,53 @@
 
     let current = null;
 
+    const topbar = document.querySelector('.topbar');
+    const wrap   = document.querySelector('.search-wrap');
+
+    /*
+    * the topbar and the search box are sticky: they sit over the top of
+    * the viewport, so the space they take is not space an item can be
+    * revealed into. the tag bar wraps on a narrow window, which makes
+    * that height a thing to measure rather than a constant to guess.
+    * */
+    function ceiling() {
+        let y = 0;
+
+        for (const el of [topbar, wrap]) {
+            if (!el) continue;
+            const bottom = el.getBoundingClientRect().bottom;
+            if (bottom > y) y = bottom;
+        }
+
+        return y;
+    }
+
+    /*
+    * scrollIntoView knows where the viewport ends but not what the sticky
+    * header hides, so the item is brought fully into the clear by hand,
+    * with a line of air on whichever side it came in from.
+    * */
+    const AIR = 12;
+
+    function reveal(li) {
+        const box = li.getBoundingClientRect();
+        const top = ceiling() + AIR;
+        const floor = window.innerHeight - AIR;
+
+        if (box.top < top) {
+            window.scrollBy(0, box.top - top);
+        } else if (box.bottom > floor) {
+            /* an item too tall for the gap still shows its beginning */
+            window.scrollBy(0, Math.min(box.bottom - floor, box.top - top));
+        }
+    }
+
     function select(li) {
         if (current) current.classList.remove('is-active');
         current = li;
         if (!li) return;
         li.classList.add('is-active');
-        li.scrollIntoView({ block: 'nearest' });
+        reveal(li);
     }
 
     function move(dir) {
