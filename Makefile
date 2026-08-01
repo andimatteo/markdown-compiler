@@ -3,7 +3,14 @@ SHELL := /bin/bash
 
 POSTS_DIR := posts
 MEDIA_DIR := static
+
 GIF_FPS := 18
+GIF_MIN_FPS := 6
+GIF_MAX_WIDTH := 720
+GIF_MIN_WIDTH := 240
+GIF_COLORS := 128
+GIF_TARGET_KB := 4096
+
 LINK_PATH := $(word 2,$(MAKECMDGOALS))
 
 .PHONY: help post gifs link
@@ -18,8 +25,9 @@ endif
 
 help:
 	@printf '%s\n' \
-		'make post    Create new post template' \
-		'make gifs    Convert .mp4 to .gif in static/'
+		'make post                  Create a new post template' \
+		'make gifs                  Convert .mov/.mp4 files in static/ to ~1 MB GIFs' \
+		'make link /path/to/folder  Link a directory inside posts/'
 
 post:
 	@mkdir -p "$(POSTS_DIR)"
@@ -60,23 +68,52 @@ gifs:
 	}
 	@set -euo pipefail; \
 	found=0; \
+	target_bytes=$$(( $(GIF_TARGET_KB) * 1024 )); \
 	while IFS= read -r -d '' input; do \
 		found=1; \
 		output="$${input%.*}.gif"; \
+		width=$(GIF_MAX_WIDTH); \
+		fps=$(GIF_FPS); \
+		colors=$(GIF_COLORS); \
 		printf 'Converting %s -> %s\n' "$$input" "$$output"; \
-		ffmpeg \
-			-nostdin \
-			-hide_banner \
-			-loglevel warning \
-			-stats \
-			-y \
-			-i "$$input" \
-			-filter_complex "[0:v]fps=$(GIF_FPS),setpts=N/($(GIF_FPS)*TB),split[a][b];[a]palettegen=max_colors=256:stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle" \
-			-loop 0 \
-			"$$output"; \
-	done < <(find "$(MEDIA_DIR)" -type f -iname '*.mp4' -print0); \
+		while :; do \
+			ffmpeg \
+				-nostdin \
+				-hide_banner \
+				-loglevel warning \
+				-stats \
+				-y \
+				-i "$$input" \
+				-filter_complex "[0:v]fps=$$fps,scale='min($$width,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=$$colors:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" \
+				-loop 0 \
+				"$$output"; \
+			size=$$(stat -f '%z' "$$output" 2>/dev/null || stat -c '%s' "$$output"); \
+			printf 'Generated %d KB — width=%d, fps=%d, colors=%d\n' \
+				"$$((size / 1024))" "$$width" "$$fps" "$$colors"; \
+			if (( size <= target_bytes )); then \
+				break; \
+			elif (( width > $(GIF_MIN_WIDTH) )); then \
+				width=$$((width * 85 / 100)); \
+				if (( width < $(GIF_MIN_WIDTH) )); then \
+					width=$(GIF_MIN_WIDTH); \
+				fi; \
+			elif (( colors > 32 )); then \
+				colors=$$((colors / 2)); \
+			elif (( fps > $(GIF_MIN_FPS) )); then \
+				fps=$$((fps - 2)); \
+				if (( fps < $(GIF_MIN_FPS) )); then \
+					fps=$(GIF_MIN_FPS); \
+				fi; \
+			else \
+				printf 'Warning: could not reduce %s below %d KB.\n' \
+					"$$output" "$(GIF_TARGET_KB)" >&2; \
+				break; \
+			fi; \
+		done; \
+	done < <(find "$(MEDIA_DIR)" -type f \
+		\( -iname '*.mov' -o -iname '*.mp4' \) -print0); \
 	if [[ $$found -eq 0 ]]; then \
-		printf 'No MP4 files found in %s\n' "$(MEDIA_DIR)"; \
+		printf 'No MOV or MP4 files found in %s\n' "$(MEDIA_DIR)"; \
 	fi
 
 link:
