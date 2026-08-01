@@ -2,9 +2,15 @@
 title: torus
 date: 2026-07-24
 description: >
-    This summer I'm taking Computer Graphics @ Stanford 
-    and thought: "why not implementing a rotating torus in the terminal in C?". 
-tags: [c, graphics, stanford]
+    This summer I'm taking Computer Graphics @ Stanford and I thought:
+    "why not implementing a rotating torus in the terminal in C?".
+
+    I know, this might sound a bit amarcod
+    but, after writing a ray-tracer in Python that actually runs in Blender,
+    doing some very simple things from scratch with no
+    dependecies feels relaxing. I felt I had so many concepts in mind
+    and just wanted to express some of them.
+tags: [c, torus, stanford]
 ---
 
 Hi, this is Andrea.
@@ -27,4 +33,4 @@ During the course might come back to add or fix some stuff ~or just forget about
 
 Here's a video demo:
 
-![demo](output.gif)
+![demo](demo.gif)

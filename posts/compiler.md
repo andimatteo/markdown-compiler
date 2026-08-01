@@ -3,11 +3,15 @@ title: .md to .html compiler
 date: 2026-07-23
 description: >
     I'm new to Rust and thought that a very pratical way to get in
-    touch with it was writing something.
-
-    I've thought of writing my own .md to .html compiler for
-    my micro-blog for a while. So here we are, both my micro-blog and my
-    project have come to life.
+    touch with it was writing something. I've thought of writing my
+    own .md to .html compiler for for a while. So here we are, both
+    my micro-blog and my project have come to life. Before even thinking of
+    writing it, I was using Hugo.
+    It was really nice, but you know, sometimes it's just too much, I just
+    wanted a very simple thing, not taking a lifetime choosing a theme and
+    other stuff,
+    or maybe as a SWE I thought I could just build it myself, and after
+    12-13 hours of my not really spare time I came eventually with something.
 tags: [rust, compiler, project]
 ---
 
