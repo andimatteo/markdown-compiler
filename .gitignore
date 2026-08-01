@@ -1,4 +1,6 @@
 /target
 dist/
+.DS_Store
 *.mp4
+*.mov
 todo.md
