@@ -53,7 +53,7 @@ and it was much easier to visually debug and also add cool stuff like colors
 and a second light (of a different color). It would be interesting to write
 `Metal` code to speed all this thing up on Apple Silicon, might be interesting to learn
 ~or just to suffer~; or also make it a rendering engine that can actually load OBJ meshes
-~or again, forget about this project forever~. For now, this is the result,
+~or again, forget about this project forever~. This is the result for now,
 cool right :) ?
 
 ![torus](torus.gif)
