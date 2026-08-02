@@ -10,7 +10,7 @@ description: >
     doing some very simple things from scratch with no
     dependecies feels relaxing. I felt I had so many concepts in mind
     and just wanted to express some of them.
-tags: [c, torus, stanford]
+tags: [c, graphics, stanford]
 ---
 
 Hi, this is Andrea.
@@ -34,3 +34,4 @@ During the course might come back to add or fix some stuff ~or just forget about
 Here's a video demo:
 
 ![demo](demo.gif)
+
