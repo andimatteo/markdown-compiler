@@ -54,7 +54,7 @@ and a second light (of a different color). It would be interesting to write
 `Metal` code to speed all this thing up on Apple Silicon, might be interesting to learn
 ~or just to suffer~; or also make it a rendering engine that can actually load OBJ meshes
 ~or again, forget about this project forever~. This is the result for now,
-cool right :) ?
+cool right :) ? The code can be found the following [repo](https://github.com/andimatteo/torus)
 
 ![torus](torus.gif)
 
